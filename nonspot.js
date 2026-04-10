@@ -6,6 +6,10 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// В начало nonspot.js после импортов
+const http = require('http');
+http.createServer((req, res) => res.end('OK')).listen(process.env.PORT || 3000);
+
 const CONFIG = {
     BOT_TOKEN: '7719507411:AAFZAYH-CQo8l5bOddMX4Zz7Mw85gTcVApo',
     WEATHER_KEY: '347ca3880bea43e6115162fb92126520'
