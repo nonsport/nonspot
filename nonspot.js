@@ -5,10 +5,13 @@ const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-
-// В начало nonspot.js после импортов
 const http = require('http');
-http.createServer((req, res) => res.end('OK')).listen(process.env.PORT || 3000);
+
+// Health check сервер
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('OK');
+}).listen(process.env.PORT || 3000);
 
 const CONFIG = {
     BOT_TOKEN: '7719507411:AAFZAYH-CQo8l5bOddMX4Zz7Mw85gTcVApo',
@@ -26,7 +29,6 @@ function checkYtDlp() {
     exec('yt-dlp --version', (error, stdout) => {
         if (error) {
             console.error('❌ yt-dlp не установлен!');
-            console.error('Установите: pip install yt-dlp');
         } else {
             console.log(`✅ yt-dlp версия: ${stdout.trim()}`);
         }
@@ -275,7 +277,6 @@ bot.on('text', async (ctx) => {
     if (!loadingMsg) return;
 
     try {
-        // Поиск трека
         const r = await yts(text);
         const track = r.videos[0];
         
@@ -288,9 +289,7 @@ bot.on('text', async (ctx) => {
         console.log(`✅ Найден трек: ${track.title}`);
 
         const filePath = path.join(os.tmpdir(), `${Date.now()}.mp3`);
-        
-        // Простая команда без лишних флагов
-        const cmd = `yt-dlp -f "ba" -x --audio-format mp3 --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" --extractor-retries 3 --retries 3 -o "${filePath}" "https://youtu.be/${track.videoId}"`;
+        const cmd = `yt-dlp -f "ba" -x --audio-format mp3 --user-agent "Mozilla/5.0" -o "${filePath}" "https://youtu.be/${track.videoId}"`;
 
         console.log(`📥 Загрузка: ${track.videoId}`);
 
