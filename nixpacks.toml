@@ -1,7 +1,0 @@
-providers = ["node"]
-
-[phases.setup]
-nixPkgs = ["nodejs", "python3", "yt-dlp", "ffmpeg"]
-
-[phases.install]
-cmds = ["npm install", "pip3 install yt-dlp"]
