@@ -1,4 +1,8 @@
 {
+  "name": "nonspot-bot",
+  "version": "1.0.0",
+  "description": "Music Downloader Bot",
+  "main": "nonspot.js",
   "dependencies": {
     "telegraf": "^4.15.3",
     "axios": "^1.6.2",
