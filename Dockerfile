@@ -1,6 +1,6 @@
 FROM node:20-slim
 
-# Устанавливаем python, ffmpeg, curl и скачиваем последнюю версию yt-dlp напрямую
+# Устанавливаем зависимости системы: python3, ffmpeg и curl
 RUN apt-get update && \
     apt-get install -y python3 ffmpeg curl && \
     curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
