@@ -289,7 +289,12 @@ bot.on('text', async (ctx) => {
         console.log(`✅ Найден трек: ${track.title}`);
 
         const filePath = path.join(os.tmpdir(), `${Date.now()}.mp3`);
-        const cmd = `yt-dlp -f "ba" -x --audio-format mp3 --user-agent "Mozilla/5.0" -o "${filePath}" "https://youtu.be/${track.videoId}"`;
+        const cmd = `yt-dlp -f "ba" -x --audio-format mp3 --no-check-certificates --geo-bypass --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -o "${filePath}" "https://www.youtube.com/watch?v=${track.videoId}"`;
+
+        // Добавьте это, чтобы видеть реальную причину ошибки в логах Railway
+child.stderr.on('data', (data) => {
+    console.error(`Детали ошибки yt-dlp: ${data}`);
+});
 
         console.log(`📥 Загрузка: ${track.videoId}`);
 
