@@ -1,4 +1,1 @@
-# Netscape HTTP Cookie File
-.youtube.com	TRUE	/	TRUE	20380101	VISITOR_INFO1_LIVE	ST1-id
-.youtube.com	TRUE	/	TRUE	20380101	CONSENT	YES+cb.20240410-00-p0.en+FX+999
-
+youtube.com	FALSE	/	FALSE	0	PREF	hl=en
