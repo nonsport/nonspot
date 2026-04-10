@@ -1,13 +1,9 @@
 const { Telegraf, Markup } = require('telegraf');
 const axios = require('axios');
 const yts = require('yt-search');
-const { exec } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
 const http = require('http');
 
-// Health check для Railway
+// Health check для Railway (чтобы сервер не засыпал)
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('OK');
@@ -15,11 +11,11 @@ http.createServer((req, res) => {
 
 const CONFIG = {
     BOT_TOKEN: process.env.BOT_TOKEN,
-    WEATHER_KEY: process.env.WEATHER_KEY
+    RAPIDAPI_KEY: process.env.RAPIDAPI_KEY // Убедись, что в Railway переменная называется именно так
 };
 
-if (!CONFIG.BOT_TOKEN) {
-    console.error("❌ BOT_TOKEN не найден в Variables!");
+if (!CONFIG.BOT_TOKEN || !CONFIG.RAPIDAPI_KEY) {
+    console.error("❌ ОШИБКА: Проверьте переменные BOT_TOKEN и RAPIDAPI_KEY в Railway!");
     process.exit(1);
 }
 
@@ -31,65 +27,47 @@ const userStats = new Map();
 const translations = {
     ru: {
         welcome: '👋 Добро пожаловать в NonSpot Music Bot',
-        chooseLanguage: '🌍 Выберите язык:',
-        languageSelected: '✅ Язык: Русский',
-        rulesText: `📜 Правила использования\n\n1. Бот ищет музыку в YouTube\n2. Файлы удаляются сразу после отправки\n\nНажимая "Принять", вы соглашаетесь с правилами.`,
+        rulesText: `📜 *Правила использования*\n\n1. Бот ищет музыку через YouTube.\n2. Используется высокоскоростное API.\n\nНажимая "Принять", вы соглашаетесь с правилами.`,
         accept: '✅ Принять',
         decline: '❌ Отказаться',
         rulesBtn: '📄 Правила',
-        acceptRules: '⚠️ Примите правила',
-        accessDenied: '❌ Доступ запрещен\n\nОтправьте /start',
-        botInfo: `🎵 *NonSpot Music Bot*\n\n🔍 Просто напиши что хочешь услышать\n\n*Примеры:*\n• Imagine Dragons Believer\n• lofi hip hop`,
+        botInfo: `🎵 *NonSpot Music Bot*\n\n🔍 Напиши название песни или исполнителя.\nЯ найду лучшее совпадение и пришлю аудио.`,
         searchMusic: '🎵 Поиск',
         statistics: '📊 Статистика',
         help: 'ℹ️ Помощь',
-        helpText: `📚 *Как пользоваться*\n\n• Напиши название песни\n• Или описание: "грустная музыка"`,
-        enterQuery: '🎵 Что ищем?',
-        searching: '🔍 Ищу...',
-        downloading: '📥 Загрузка',
-        sending: '📤 Отправка...',
-        canceled: '🚫 Отменено',
-        error: '❌ Ошибка загрузки. Попробуй другой запрос.',
-        notFound: '❌ Ничего не найдено',
-        ready: '✅ Готово',
-        continueSearch: '👇 Продолжить поиск:',
+        helpText: `📚 *Как пользоваться*\n\nПросто отправь мне текст, например: \n_"Miyagi Fire"_`,
+        enterQuery: '🎵 Что ищем? Введи название:',
+        searching: '🔍 Ищу в YouTube...',
+        downloading: '📥 Подготовка аудио...',
+        sending: '📤 Отправка в Telegram...',
+        error: '❌ Ошибка. Видео недоступно или лимит API исчерпан.',
+        notFound: '❌ Ничего не найдено.',
         yourStats: '📊 Ваша статистика',
-        searches: '🔍 Поисков',
-        downloads: '⬇️ Загрузок',
-        from: 'из',
-        cancel: '❌ Отменить',
-        back: '🔙 Назад'
+        searches: 'Поисков',
+        downloads: 'Загрузок',
+        from: 'через'
     },
     en: {
         welcome: '👋 Welcome to NonSpot Music Bot',
-        chooseLanguage: '🌍 Choose language:',
-        languageSelected: '✅ Language: English',
-        rulesText: `📜 Terms of Use\n\n1. Bot searches music on YouTube\n2. Files deleted after sending`,
+        rulesText: `📜 *Terms of Use*\n\n1. Bot searches music via YouTube.\n2. High-speed API is used.`,
         accept: '✅ Accept',
         decline: '❌ Decline',
         rulesBtn: '📄 Rules',
-        acceptRules: '⚠️ Accept terms',
-        accessDenied: '❌ Access denied',
-        botInfo: `🎵 *NonSpot Music Bot*\n\n🔍 Just type what you want to hear`,
+        botInfo: `🎵 *NonSpot Music Bot*\n\n🔍 Type a song name or artist.`,
         searchMusic: '🎵 Search',
         statistics: '📊 Stats',
         help: 'ℹ️ Help',
-        helpText: `📚 *How to use*\n\n• Type a song name\n• Or description: "sad music"`,
+        helpText: `📚 *How to use*\n\nJust send me a text, for example: \n_"Interstellar theme"_`,
         enterQuery: '🎵 What to search?',
-        searching: '🔍 Searching...',
-        downloading: '📥 Downloading',
-        sending: '📤 Sending...',
-        canceled: '🚫 Canceled',
-        error: '❌ Download error. Try another query.',
-        notFound: '❌ Nothing found',
-        ready: '✅ Done',
-        continueSearch: '👇 Continue search:',
+        searching: '🔍 Searching YouTube...',
+        downloading: '📥 Preparing audio...',
+        sending: '📤 Sending to Telegram...',
+        error: '❌ Error. Video unavailable or API limit reached.',
+        notFound: '❌ Nothing found.',
         yourStats: '📊 Your statistics',
-        searches: '🔍 Searches',
-        downloads: '⬇️ Downloads',
-        from: 'from',
-        cancel: '❌ Cancel',
-        back: '🔙 Back'
+        searches: 'Searches',
+        downloads: 'Downloads',
+        from: 'via'
     }
 };
 
@@ -107,21 +85,22 @@ const updateStats = (userId, action) => {
 };
 
 const showMainMenu = async (ctx, userId) => {
-    const replyKB = Markup.keyboard([[getText(userId, 'searchMusic')], [getText(userId, 'statistics'), getText(userId, 'help')]]).resize();
-    const inlineKB = Markup.inlineKeyboard([
-        [Markup.button.callback(getText(userId, 'searchMusic'), 'menu_search')],
-        [Markup.button.callback(getText(userId, 'statistics'), 'menu_stats')],
-        [Markup.button.callback(getText(userId, 'help'), 'menu_help')]
-    ]);
-    await ctx.reply(getText(userId, 'continueSearch'), replyKB);
-    await ctx.reply(getText(userId, 'botInfo'), { parse_mode: 'Markdown', ...inlineKB });
+    const replyKB = Markup.keyboard([
+        [getText(userId, 'searchMusic')],
+        [getText(userId, 'statistics'), getText(userId, 'help')]
+    ]).resize();
+    
+    await ctx.reply(getText(userId, 'welcome'), replyKB);
+    await ctx.replyWithMarkdown(getText(userId, 'botInfo'));
 };
 
 // --- Команды ---
 
 bot.start((ctx) => {
-    const userId = ctx.from.id;
-    const kb = Markup.inlineKeyboard([[Markup.button.callback('🇷🇺 Русский', 'lang_ru')], [Markup.button.callback('🇬🇧 English', 'lang_en')]]);
+    const kb = Markup.inlineKeyboard([
+        [Markup.button.callback('🇷🇺 Русский', 'lang_ru')],
+        [Markup.button.callback('🇬🇧 English', 'lang_en')]
+    ]);
     ctx.reply('🌍 Выберите язык / Choose language:', kb);
 });
 
@@ -131,10 +110,9 @@ bot.action(/lang_(.+)/, async (ctx) => {
     userLanguages.set(userId, lang);
     await ctx.answerCbQuery();
     const agreeKB = Markup.inlineKeyboard([
-        [Markup.button.callback(getText(userId, 'accept'), 'agree_yes'), Markup.button.callback(getText(userId, 'decline'), 'agree_no')],
-        [Markup.button.callback(getText(userId, 'rulesBtn'), 'show_rules')]
+        [Markup.button.callback(getText(userId, 'accept'), 'agree_yes'), Markup.button.callback(getText(userId, 'decline'), 'agree_no')]
     ]);
-    await ctx.reply(getText(userId, 'rulesText'), agreeKB);
+    await ctx.replyWithMarkdown(getText(userId, 'rulesText'), agreeKB);
 });
 
 bot.action('agree_yes', async (ctx) => {
@@ -144,11 +122,9 @@ bot.action('agree_yes', async (ctx) => {
     await showMainMenu(ctx, userId);
 });
 
-bot.action('menu_stats', (ctx) => {
-    const userId = ctx.from.id;
-    const stats = userStats.get(userId) || { searches: 0, downloads: 0 };
-    ctx.reply(`📊 *${getText(userId, 'yourStats')}*\n\n🔍 ${getText(userId, 'searches')}: ${stats.searches}\n⬇️ ${getText(userId, 'downloads')}: ${stats.downloads}`, { parse_mode: 'Markdown' });
+bot.action('agree_no', (ctx) => {
     ctx.answerCbQuery();
+    ctx.reply('❌ Доступ ограничен без принятия правил.');
 });
 
 bot.on('text', async (ctx) => {
@@ -156,59 +132,72 @@ bot.on('text', async (ctx) => {
     const userId = ctx.from.id;
 
     if (!userAgreements.has(userId)) return ctx.reply('⚠️ Сначала /start');
-    if ([getText(userId, 'searchMusic'), getText(userId, 'statistics'), getText(userId, 'help'), '🎵 Поиск', '📊 Статистика', 'ℹ️ Помощь'].includes(text)) {
-        if (text.includes('Статистика') || text.includes('Stats')) {
-            const stats = userStats.get(userId) || { searches: 0, downloads: 0 };
-            return ctx.reply(`📊 ${stats.searches} | ⬇️ ${stats.downloads}`);
-        }
-        return ctx.reply(getText(userId, 'enterQuery'), Markup.removeKeyboard());
+
+    // Кнопки меню
+    if (text.includes('Статистика') || text.includes('Stats')) {
+        const stats = userStats.get(userId) || { searches: 0, downloads: 0 };
+        return ctx.replyWithMarkdown(`📊 *${getText(userId, 'yourStats')}*\n\n🔍 ${getText(userId, 'searches')}: ${stats.searches}\n⬇️ ${getText(userId, 'downloads')}: ${stats.downloads}`);
+    }
+    if (text.includes('Помощь') || text.includes('Help')) {
+        return ctx.replyWithMarkdown(getText(userId, 'helpText'));
+    }
+    if (text.includes('Поиск') || text.includes('Search')) {
+        return ctx.reply(getText(userId, 'enterQuery'));
     }
 
+    // ЛОГИКА ПОИСКА И ЗАГРУЗКИ
     const loadingMsg = await ctx.reply(getText(userId, 'searching'));
 
     try {
+        // 1. Поиск видео через yt-search (оставляем твой метод)
         const r = await yts(text);
         const track = r.videos[0];
         if (!track) return ctx.reply(getText(userId, 'notFound'));
 
-        const filePath = path.join(os.tmpdir(), `${Date.now()}.mp3`);
-        const cmd = `yt-dlp -f "ba" -x --audio-format mp3 --no-check-certificates --geo-bypass --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -o "${filePath}" "https://www.youtube.com/watch?v=${track.videoId}"`;
+        updateStats(userId, 'search');
 
-        // ПРАВИЛЬНЫЙ ПОРЯДОК:
-        const child = exec(cmd, { timeout: 120000 });
+        // 2. Запрос к RapidAPI вместо yt-dlp
+        await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, null, getText(userId, 'downloading'));
 
-        child.stderr.on('data', (data) => {
-            console.error(`yt-dlp: ${data}`);
-        });
-
-        child.on('exit', async (code) => {
-            if (code !== 0 || !fs.existsSync(filePath)) {
-                await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
-                return ctx.reply(getText(userId, 'error'));
+        const options = {
+            method: 'GET',
+            url: 'https://youtube-mp310.p.rapidapi.com/download/mp3',
+            params: { url: track.url },
+            headers: {
+                'x-rapidapi-key': CONFIG.RAPIDAPI_KEY,
+                'x-rapidapi-host': 'youtube-mp310.p.rapidapi.com'
             }
+        };
 
-            try {
-                updateStats(userId, 'search');
-                updateStats(userId, 'download');
-                
-                await ctx.replyWithAudio({ source: filePath }, {
-                    title: track.title,
-                    performer: track.author.name,
-                    caption: `🎵 ${track.title} ${getText(userId, 'from')} NonSpot`
-                });
-                await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
-            } catch (e) {
-                console.error('Send error:', e);
-            } finally {
-                if (fs.existsSync(filePath)) try { fs.unlinkSync(filePath); } catch(e) {}
+        const response = await axios.request(options);
+        const downloadUrl = response.data.downloadUrl || response.data.url;
+
+        if (!downloadUrl) throw new Error("API returned no link");
+
+        // 3. Отправка аудио
+        await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, null, getText(userId, 'sending'));
+
+        await ctx.replyWithAudio(
+            { url: downloadUrl },
+            {
+                title: track.title,
+                performer: track.author.name,
+                caption: `🎵 ${track.title}\n👤 ${track.author.name}\n\n✅ ${getText(userId, 'from')} NonSpot Bot`
             }
-        });
+        );
+
+        updateStats(userId, 'download');
+        await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
 
     } catch (e) {
-        console.error('Global error:', e);
+        console.error('Download Error:', e.message);
         ctx.reply(getText(userId, 'error'));
+        ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
     }
 });
 
-bot.launch().then(() => console.log('🚀 Бот успешно запущен на Railway'));
+bot.launch().then(() => console.log('🚀 Бот запущен на RapidAPI + Railway'));
+
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
