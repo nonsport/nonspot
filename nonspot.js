@@ -14,8 +14,8 @@ http.createServer((req, res) => {
 }).listen(process.env.PORT || 3000);
 
 const CONFIG = {
-    BOT_TOKEN: '7719507411:AAFZAYH-CQo8l5bOddMX4Zz7Mw85gTcVApo',
-    WEATHER_KEY: '347ca3880bea43e6115162fb92126520'
+    BOT_TOKEN: process.env.BOT_TOKEN,
+    WEATHER_KEY: process.env.WEATHER_KEY
 };
 
 const bot = new Telegraf(CONFIG.BOT_TOKEN);
