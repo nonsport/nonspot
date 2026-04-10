@@ -11,147 +11,76 @@ http.createServer((req, res) => {
 
 const CONFIG = {
     BOT_TOKEN: process.env.BOT_TOKEN,
-    RAPIDAPI_KEY: process.env.RAPIDAPI_KEY
+    RAPIDAPI_KEY: process.env.RAPIDAPI_KEY || '80b22b9b7bmshcd0386192ef8e9ep1356ecjsn690a6092574b'
 };
-
-if (!CONFIG.BOT_TOKEN || !CONFIG.RAPIDAPI_KEY) {
-    console.error("❌ Переменные BOT_TOKEN или RAPIDAPI_KEY не найдены в Railway!");
-    process.exit(1);
-}
 
 const bot = new Telegraf(CONFIG.BOT_TOKEN);
 const userAgreements = new Set();
-const userLanguages = new Map();
-const userStats = new Map();
 
-const translations = {
-    ru: {
-        welcome: '👋 Добро пожаловать в NonSpot Music Bot',
-        rulesText: `📜 *Правила использования*\n\n1. Бот ищет музыку через YouTube.\n2. Мы используем прямое API для быстрой загрузки.`,
-        accept: '✅ Принять',
-        decline: '❌ Отказаться',
-        botInfo: `🎵 *NonSpot Music Bot*\n\n🔍 Просто напиши название песни.`,
-        searchMusic: '🎵 Поиск',
-        statistics: '📊 Статистика',
-        help: 'ℹ️ Помощь',
-        enterQuery: '🎵 Что ищем? Введи название:',
-        searching: '🔍 Ищу в YouTube...',
-        downloading: '📥 Подготовка MP3...',
-        sending: '📤 Отправка...',
-        error: '❌ Ошибка. Попробуй другое видео или проверь RapidAPI.',
-        notFound: '❌ Ничего не найдено',
-        from: 'через'
-    },
-    en: {
-        welcome: '👋 Welcome to NonSpot Music Bot',
-        rulesText: `📜 *Terms of Use*\n\n1. Bot searches music via YouTube.\n2. Fast API is used for downloading.`,
-        accept: '✅ Accept',
-        decline: '❌ Decline',
-        botInfo: `🎵 *NonSpot Music Bot*\n\n🔍 Just type a song name.`,
-        searchMusic: '🎵 Search',
-        statistics: '📊 Stats',
-        help: 'ℹ️ Help',
-        enterQuery: '🎵 What to search?',
-        searching: '🔍 Searching YouTube...',
-        downloading: '📥 Preparing MP3...',
-        sending: '📤 Sending...',
-        error: '❌ Error. Try another video.',
-        notFound: '❌ Nothing found',
-        from: 'via'
-    }
-};
-
-const getText = (userId, key) => {
-    const lang = userLanguages.get(userId) || 'ru';
-    return translations[lang][key] || translations.ru[key];
-};
-
-const updateStats = (userId, action) => {
-    if (!userStats.has(userId)) userStats.set(userId, { searches: 0, downloads: 0 });
-    const stats = userStats.get(userId);
-    if (action === 'search') stats.searches++;
-    if (action === 'download') stats.downloads++;
-    userStats.set(userId, stats);
-};
+// --- Интерфейс ---
+const getMenu = () => Markup.keyboard([['🎵 Поиск'], ['📊 Статистика', 'ℹ️ Помощь']]).resize();
 
 bot.start((ctx) => {
-    const kb = Markup.inlineKeyboard([
-        [Markup.button.callback('🇷🇺 Русский', 'lang_ru')],
-        [Markup.button.callback('🇬🇧 English', 'lang_en')]
-    ]);
-    ctx.reply('🌍 Выберите язык / Choose language:', kb);
+    ctx.replyWithHTML(`<b>👋 Привет, ${ctx.from.first_name}!</b>\nПринимай правила и погнали.`, 
+    Markup.inlineKeyboard([[Markup.button.callback('✅ Принять правила', 'agree')]]));
 });
 
-bot.action(/lang_(.+)/, async (ctx) => {
-    const lang = ctx.match[1];
-    const userId = ctx.from.id;
-    userLanguages.set(userId, lang);
-    await ctx.answerCbQuery();
-    const agreeKB = Markup.inlineKeyboard([
-        [Markup.button.callback(getText(userId, 'accept'), 'agree_yes'), Markup.button.callback(getText(userId, 'decline'), 'agree_no')]
-    ]);
-    await ctx.replyWithMarkdown(getText(userId, 'rulesText'), agreeKB);
-});
-
-bot.action('agree_yes', async (ctx) => {
-    const userId = ctx.from.id;
-    userAgreements.add(userId);
-    await ctx.answerCbQuery();
-    const replyKB = Markup.keyboard([[getText(userId, 'searchMusic')], [getText(userId, 'statistics'), getText(userId, 'help')]]).resize();
-    await ctx.reply(getText(userId, 'welcome'), replyKB);
+bot.action('agree', (ctx) => {
+    userAgreements.add(ctx.from.id);
+    ctx.answerCbQuery();
+    ctx.reply('Принято! Что хочешь послушать? Просто напиши название или скинь ссылку.', getMenu());
 });
 
 bot.on('text', async (ctx) => {
     const text = ctx.message.text;
     const userId = ctx.from.id;
 
-    if (!userAgreements.has(userId)) return ctx.reply('⚠️ Сначала /start');
+    if (!userAgreements.has(userId)) return ctx.reply('⚠️ Нажми /start и прими правила.');
+    if (['🎵 Поиск', '📊 Статистика', 'ℹ️ Помощь'].includes(text)) return ctx.reply('Просто отправь название песни!');
 
-    if (text.includes('Статистика') || text.includes('Stats')) {
-        const stats = userStats.get(userId) || { searches: 0, downloads: 0 };
-        return ctx.reply(`📊 Поисков: ${stats.searches} | Загрузок: ${stats.downloads}`);
-    }
-
-    const loadingMsg = await ctx.reply(getText(userId, 'searching'));
+    const statusMsg = await ctx.reply('🔍 Ищу...');
 
     try {
+        // 1. Поиск
         const r = await yts(text);
-        const track = r.videos[0];
-        if (!track) return ctx.reply(getText(userId, 'notFound'));
+        const video = r.videos[0];
+        if (!video) return ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, '❌ Ничего не найдено.');
 
-        updateStats(userId, 'search');
-        await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, null, getText(userId, 'downloading'));
+        await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, `⏳ Качаю: ${video.title}...`);
 
+        // 2. Запрос к RapidAPI
         const options = {
             method: 'GET',
             url: 'https://youtube-mp310.p.rapidapi.com/download/mp3',
-            params: { url: track.url },
+            params: { url: video.url },
             headers: {
                 'x-rapidapi-key': CONFIG.RAPIDAPI_KEY,
                 'x-rapidapi-host': 'youtube-mp310.p.rapidapi.com'
             }
         };
 
-        const response = await axios.request(options);
-        const downloadUrl = response.data.downloadUrl || response.data.url;
+        const result = await axios.request(options);
+        
+        // Бывает, что ссылка лежит в разных полях в зависимости от ответа API
+        const downloadUrl = result.data.downloadUrl || result.data.url || result.data.link;
 
         if (downloadUrl) {
-            await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, null, getText(userId, 'sending'));
-            await ctx.replyWithAudio({ url: downloadUrl }, {
-                title: track.title,
-                performer: track.author.name,
-                caption: `🎵 ${track.title} ${getText(userId, 'from')} NonSpot`
+            await ctx.replyWithAudio({ url: downloadUrl }, { 
+                title: video.title, 
+                performer: video.author.name,
+                caption: `✅ Готово! Наслаждайся.`
             });
-            updateStats(userId, 'download');
-            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
+            ctx.deleteMessage(statusMsg.message_id).catch(() => {});
         } else {
-            throw new Error("No link");
+            console.log('ОТВЕТ API БЕЗ ССЫЛКИ:', result.data);
+            ctx.reply('⚠️ Сервер API сейчас перегружен или не может обработать это видео. Попробуй другое.');
         }
+
     } catch (e) {
-        ctx.reply(getText(userId, 'error'));
-        ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
+        console.error('КРИТИЧЕСКАЯ ОШИБКА:', e.response ? e.response.data : e.message);
+        ctx.reply('❌ Ошибка связи с сервером. Проверь подписку на YouTube MP310 в RapidAPI.');
     }
 });
 
-bot.launch().then(() => console.log('🚀 Бот запущен!'));
+bot.launch().then(() => console.log('🚀 Бот в сети!'));
 
