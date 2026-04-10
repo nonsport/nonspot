@@ -1,5 +1,7 @@
 {
   "dependencies": {
-    "ytdl-core": "^4.11.5"
+    "telegraf": "^4.15.3",
+    "axios": "^1.6.2",
+    "yt-search": "^2.12.0"
   }
 }
