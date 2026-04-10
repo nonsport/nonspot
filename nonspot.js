@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const http = require('http');
 
-// Health check сервер
+// Health check для Railway
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('OK');
@@ -18,22 +18,15 @@ const CONFIG = {
     WEATHER_KEY: process.env.WEATHER_KEY
 };
 
-const bot = new Telegraf(CONFIG.BOT_TOKEN);
+if (!CONFIG.BOT_TOKEN) {
+    console.error("❌ BOT_TOKEN не найден в Variables!");
+    process.exit(1);
+}
 
+const bot = new Telegraf(CONFIG.BOT_TOKEN);
 const userAgreements = new Set();
 const userLanguages = new Map();
 const userStats = new Map();
-
-// Проверка yt-dlp
-function checkYtDlp() {
-    exec('yt-dlp --version', (error, stdout) => {
-        if (error) {
-            console.error('❌ yt-dlp не установлен!');
-        } else {
-            console.log(`✅ yt-dlp версия: ${stdout.trim()}`);
-        }
-    });
-}
 
 const translations = {
     ru: {
@@ -46,17 +39,17 @@ const translations = {
         rulesBtn: '📄 Правила',
         acceptRules: '⚠️ Примите правила',
         accessDenied: '❌ Доступ запрещен\n\nОтправьте /start',
-        botInfo: `🎵 *NonSpot Music Bot*\n\n🔍 Просто напиши что хочешь услышать\n\n*Примеры:*\n• Imagine Dragons Believer\n• sad music\n• lofi hip hop`,
+        botInfo: `🎵 *NonSpot Music Bot*\n\n🔍 Просто напиши что хочешь услышать\n\n*Примеры:*\n• Imagine Dragons Believer\n• lofi hip hop`,
         searchMusic: '🎵 Поиск',
         statistics: '📊 Статистика',
         help: 'ℹ️ Помощь',
-        helpText: `📚 *Как пользоваться*\n\n• Напиши название песни\n• Или описание: "грустная музыка"\n\n*Примеры:*\nsad music\nImagine Dragons\nlofi hip hop`,
+        helpText: `📚 *Как пользоваться*\n\n• Напиши название песни\n• Или описание: "грустная музыка"`,
         enterQuery: '🎵 Что ищем?',
         searching: '🔍 Ищу...',
         downloading: '📥 Загрузка',
         sending: '📤 Отправка...',
         canceled: '🚫 Отменено',
-        error: '❌ Ошибка. Попробуй другой запрос.',
+        error: '❌ Ошибка загрузки. Попробуй другой запрос.',
         notFound: '❌ Ничего не найдено',
         ready: '✅ Готово',
         continueSearch: '👇 Продолжить поиск:',
@@ -71,23 +64,23 @@ const translations = {
         welcome: '👋 Welcome to NonSpot Music Bot',
         chooseLanguage: '🌍 Choose language:',
         languageSelected: '✅ Language: English',
-        rulesText: `📜 Terms of Use\n\n1. Bot searches music on YouTube\n2. Files deleted after sending\n\nClick "Accept" to agree.`,
+        rulesText: `📜 Terms of Use\n\n1. Bot searches music on YouTube\n2. Files deleted after sending`,
         accept: '✅ Accept',
         decline: '❌ Decline',
         rulesBtn: '📄 Rules',
         acceptRules: '⚠️ Accept terms',
-        accessDenied: '❌ Access denied\n\nSend /start',
-        botInfo: `🎵 *NonSpot Music Bot*\n\n🔍 Just type what you want to hear\n\n*Examples:*\n• Imagine Dragons Believer\n• sad music\n• lofi hip hop`,
+        accessDenied: '❌ Access denied',
+        botInfo: `🎵 *NonSpot Music Bot*\n\n🔍 Just type what you want to hear`,
         searchMusic: '🎵 Search',
         statistics: '📊 Stats',
         help: 'ℹ️ Help',
-        helpText: `📚 *How to use*\n\n• Type a song name\n• Or description: "sad music"\n\n*Examples:*\nsad music\nImagine Dragons\nlofi hip hop`,
+        helpText: `📚 *How to use*\n\n• Type a song name\n• Or description: "sad music"`,
         enterQuery: '🎵 What to search?',
         searching: '🔍 Searching...',
         downloading: '📥 Downloading',
         sending: '📤 Sending...',
         canceled: '🚫 Canceled',
-        error: '❌ Error. Try another query.',
+        error: '❌ Download error. Try another query.',
         notFound: '❌ Nothing found',
         ready: '✅ Done',
         continueSearch: '👇 Continue search:',
@@ -105,71 +98,31 @@ const getText = (userId, key) => {
     return translations[lang][key] || translations.ru[key];
 };
 
-const languageKB = Markup.inlineKeyboard([
-    [Markup.button.callback('🇷🇺 Русский', 'lang_ru')],
-    [Markup.button.callback('🇬🇧 English', 'lang_en')]
-]);
-
-const getAgreementKB = (userId) => {
-    return Markup.inlineKeyboard([
-        [Markup.button.callback(getText(userId, 'accept'), 'agree_yes'),
-         Markup.button.callback(getText(userId, 'decline'), 'agree_no')],
-        [Markup.button.callback(getText(userId, 'rulesBtn'), 'show_rules')]
-    ]);
-};
-
-const getMainMenuInline = (userId) => {
-    return Markup.inlineKeyboard([
-        [Markup.button.callback(getText(userId, 'searchMusic'), 'menu_search')],
-        [Markup.button.callback(getText(userId, 'statistics'), 'menu_stats')],
-        [Markup.button.callback(getText(userId, 'help'), 'menu_help')]
-    ]);
-};
-
-const getMainReplyKB = (userId) => {
-    return Markup.keyboard([
-        [getText(userId, 'searchMusic')],
-        [getText(userId, 'statistics'), getText(userId, 'help')]
-    ]).resize();
-};
-
-const showMainMenu = async (ctx, userId) => {
-    await ctx.reply(getText(userId, 'continueSearch'), getMainReplyKB(userId));
-    await ctx.reply(getText(userId, 'botInfo'), { parse_mode: 'Markdown', ...getMainMenuInline(userId) });
-};
-
-const getCancelKB = (userId) => {
-    return Markup.inlineKeyboard([
-        [Markup.button.callback(getText(userId, 'cancel'), 'action_cancel')]
-    ]);
-};
-
-const getBackKB = (userId) => {
-    return Markup.inlineKeyboard([
-        [Markup.button.callback(getText(userId, 'back'), 'back_to_menu')]
-    ]);
-};
-
 const updateStats = (userId, action) => {
-    if (!userStats.has(userId)) {
-        userStats.set(userId, { searches: 0, downloads: 0 });
-    }
+    if (!userStats.has(userId)) userStats.set(userId, { searches: 0, downloads: 0 });
     const stats = userStats.get(userId);
     if (action === 'search') stats.searches++;
     if (action === 'download') stats.downloads++;
     userStats.set(userId, stats);
 };
 
+const showMainMenu = async (ctx, userId) => {
+    const replyKB = Markup.keyboard([[getText(userId, 'searchMusic')], [getText(userId, 'statistics'), getText(userId, 'help')]]).resize();
+    const inlineKB = Markup.inlineKeyboard([
+        [Markup.button.callback(getText(userId, 'searchMusic'), 'menu_search')],
+        [Markup.button.callback(getText(userId, 'statistics'), 'menu_stats')],
+        [Markup.button.callback(getText(userId, 'help'), 'menu_help')]
+    ]);
+    await ctx.reply(getText(userId, 'continueSearch'), replyKB);
+    await ctx.reply(getText(userId, 'botInfo'), { parse_mode: 'Markdown', ...inlineKB });
+};
+
+// --- Команды ---
+
 bot.start((ctx) => {
     const userId = ctx.from.id;
-    if (!userLanguages.has(userId)) {
-        return ctx.reply('🌍 Выберите язык:', languageKB);
-    }
-    if (!userAgreements.has(userId)) {
-        return ctx.reply(getText(userId, 'acceptRules'), getAgreementKB(userId));
-    }
-    ctx.reply(getText(userId, 'welcome'));
-    showMainMenu(ctx, userId);
+    const kb = Markup.inlineKeyboard([[Markup.button.callback('🇷🇺 Русский', 'lang_ru')], [Markup.button.callback('🇬🇧 English', 'lang_en')]]);
+    ctx.reply('🌍 Выберите язык / Choose language:', kb);
 });
 
 bot.action(/lang_(.+)/, async (ctx) => {
@@ -177,194 +130,85 @@ bot.action(/lang_(.+)/, async (ctx) => {
     const userId = ctx.from.id;
     userLanguages.set(userId, lang);
     await ctx.answerCbQuery();
-    await ctx.deleteMessage().catch(() => {});
-    await ctx.reply(getText(userId, 'languageSelected'));
-    await ctx.reply(getText(userId, 'welcome'));
-    await ctx.reply(getText(userId, 'acceptRules'), getAgreementKB(userId));
-});
-
-bot.action('show_rules', (ctx) => {
-    const userId = ctx.from.id;
-    ctx.answerCbQuery();
-    ctx.reply(getText(userId, 'rulesText'), getAgreementKB(userId));
+    const agreeKB = Markup.inlineKeyboard([
+        [Markup.button.callback(getText(userId, 'accept'), 'agree_yes'), Markup.button.callback(getText(userId, 'decline'), 'agree_no')],
+        [Markup.button.callback(getText(userId, 'rulesBtn'), 'show_rules')]
+    ]);
+    await ctx.reply(getText(userId, 'rulesText'), agreeKB);
 });
 
 bot.action('agree_yes', async (ctx) => {
     const userId = ctx.from.id;
     userAgreements.add(userId);
-    await ctx.answerCbQuery('✅');
-    await ctx.deleteMessage().catch(() => {});
-    await ctx.reply(getText(userId, 'welcome'));
-    await showMainMenu(ctx, userId);
-});
-
-bot.action('agree_no', async (ctx) => {
-    const userId = ctx.from.id;
     await ctx.answerCbQuery();
-    await ctx.deleteMessage().catch(() => {});
-    await ctx.reply(getText(userId, 'accessDenied'));
-});
-
-bot.action('back_to_menu', async (ctx) => {
-    const userId = ctx.from.id;
-    await ctx.answerCbQuery();
-    await ctx.deleteMessage().catch(() => {});
     await showMainMenu(ctx, userId);
-});
-
-bot.action('menu_search', (ctx) => {
-    const userId = ctx.from.id;
-    ctx.answerCbQuery();
-    ctx.reply(getText(userId, 'enterQuery'), Markup.removeKeyboard());
 });
 
 bot.action('menu_stats', (ctx) => {
     const userId = ctx.from.id;
-    ctx.answerCbQuery();
     const stats = userStats.get(userId) || { searches: 0, downloads: 0 };
-    ctx.reply(
-        `📊 *${getText(userId, 'yourStats')}*\n\n` +
-        `🔍 ${getText(userId, 'searches')}: ${stats.searches}\n` +
-        `⬇️ ${getText(userId, 'downloads')}: ${stats.downloads}`,
-        { parse_mode: 'Markdown', ...getBackKB(userId) }
-    );
-});
-
-bot.action('menu_help', (ctx) => {
-    const userId = ctx.from.id;
+    ctx.reply(`📊 *${getText(userId, 'yourStats')}*\n\n🔍 ${getText(userId, 'searches')}: ${stats.searches}\n⬇️ ${getText(userId, 'downloads')}: ${stats.downloads}`, { parse_mode: 'Markdown' });
     ctx.answerCbQuery();
-    ctx.reply(getText(userId, 'helpText'), { parse_mode: 'Markdown', ...getBackKB(userId) });
-});
-
-bot.hears(/^(🎵 Поиск|🎵 Search)$/, (ctx) => {
-    const userId = ctx.from.id;
-    if (!userAgreements.has(userId)) return ctx.reply(getText(userId, 'acceptRules'), getAgreementKB(userId));
-    ctx.reply(getText(userId, 'enterQuery'), Markup.removeKeyboard());
-});
-
-bot.hears(/^(ℹ️ Помощь|ℹ️ Help)$/, (ctx) => {
-    const userId = ctx.from.id;
-    if (!userAgreements.has(userId)) return ctx.reply(getText(userId, 'acceptRules'), getAgreementKB(userId));
-    ctx.reply(getText(userId, 'helpText'), { parse_mode: 'Markdown', ...getBackKB(userId) });
-});
-
-bot.hears(/^(📊 Статистика|📊 Stats)$/, (ctx) => {
-    const userId = ctx.from.id;
-    if (!userAgreements.has(userId)) return ctx.reply(getText(userId, 'acceptRules'), getAgreementKB(userId));
-    const stats = userStats.get(userId) || { searches: 0, downloads: 0 };
-    ctx.reply(
-        `📊 *${getText(userId, 'yourStats')}*\n\n` +
-        `🔍 ${getText(userId, 'searches')}: ${stats.searches}\n` +
-        `⬇️ ${getText(userId, 'downloads')}: ${stats.downloads}`,
-        { parse_mode: 'Markdown', ...getBackKB(userId) }
-    );
 });
 
 bot.on('text', async (ctx) => {
     const text = ctx.message.text;
     const userId = ctx.from.id;
-    
-    if (!userAgreements.has(userId)) {
-        return ctx.reply(getText(userId, 'acceptRules'), getAgreementKB(userId));
+
+    if (!userAgreements.has(userId)) return ctx.reply('⚠️ Сначала /start');
+    if ([getText(userId, 'searchMusic'), getText(userId, 'statistics'), getText(userId, 'help'), '🎵 Поиск', '📊 Статистика', 'ℹ️ Помощь'].includes(text)) {
+        if (text.includes('Статистика') || text.includes('Stats')) {
+            const stats = userStats.get(userId) || { searches: 0, downloads: 0 };
+            return ctx.reply(`📊 ${stats.searches} | ⬇️ ${stats.downloads}`);
+        }
+        return ctx.reply(getText(userId, 'enterQuery'), Markup.removeKeyboard());
     }
 
-    const menuButtons = [getText(userId, 'searchMusic'), getText(userId, 'statistics'), getText(userId, 'help')];
-    if (menuButtons.includes(text)) return;
-
-    console.log(`🔍 Поиск: "${text}"`);
-
-    const loadingMsg = await ctx.reply(getText(userId, 'searching'), getCancelKB(userId)).catch(() => {});
-    if (!loadingMsg) return;
+    const loadingMsg = await ctx.reply(getText(userId, 'searching'));
 
     try {
         const r = await yts(text);
         const track = r.videos[0];
-        
-        if (!track) {
-            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
-            await ctx.reply(getText(userId, 'notFound'));
-            return showMainMenu(ctx, userId);
-        }
-
-        console.log(`✅ Найден трек: ${track.title}`);
+        if (!track) return ctx.reply(getText(userId, 'notFound'));
 
         const filePath = path.join(os.tmpdir(), `${Date.now()}.mp3`);
         const cmd = `yt-dlp -f "ba" -x --audio-format mp3 --no-check-certificates --geo-bypass --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -o "${filePath}" "https://www.youtube.com/watch?v=${track.videoId}"`;
 
-        // Добавьте это, чтобы видеть реальную причину ошибки в логах Railway
-child.stderr.on('data', (data) => {
-    console.error(`Детали ошибки yt-dlp: ${data}`);
-});
-
-        console.log(`📥 Загрузка: ${track.videoId}`);
-
+        // ПРАВИЛЬНЫЙ ПОРЯДОК:
         const child = exec(cmd, { timeout: 120000 });
+
+        child.stderr.on('data', (data) => {
+            console.error(`yt-dlp: ${data}`);
+        });
 
         child.on('exit', async (code) => {
             if (code !== 0 || !fs.existsSync(filePath)) {
-                console.error(`❌ Ошибка загрузки, код: ${code}`);
                 await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
-                await ctx.reply(getText(userId, 'error'));
-                return showMainMenu(ctx, userId);
+                return ctx.reply(getText(userId, 'error'));
             }
 
             try {
-                await ctx.telegram.editMessageText(
-                    ctx.chat.id, loadingMsg.message_id, null,
-                    getText(userId, 'sending')
-                ).catch(() => {});
-
                 updateStats(userId, 'search');
                 updateStats(userId, 'download');
                 
-                const lang = userLanguages.get(userId) || 'ru';
-                const fromText = translations[lang].from;
-
-                await ctx.replyWithAudio(
-                    { source: filePath },
-                    {
-                        title: track.title,
-                        performer: track.author.name,
-                        caption: `🎵 ${track.title} ${fromText} NonSpot\n👤 ${track.author.name}\n⏱ ${track.timestamp}`
-                    }
-                );
-
+                await ctx.replyWithAudio({ source: filePath }, {
+                    title: track.title,
+                    performer: track.author.name,
+                    caption: `🎵 ${track.title} ${getText(userId, 'from')} NonSpot`
+                });
                 await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
-                await ctx.reply(getText(userId, 'ready'));
-                await showMainMenu(ctx, userId);
-
             } catch (e) {
                 console.error('Send error:', e);
-                await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
-                await ctx.reply(getText(userId, 'error'));
-                return showMainMenu(ctx, userId);
             } finally {
-                if (fs.existsSync(filePath)) {
-                    try { fs.unlinkSync(filePath); } catch(e) {}
-                }
+                if (fs.existsSync(filePath)) try { fs.unlinkSync(filePath); } catch(e) {}
             }
         });
 
     } catch (e) {
-        console.error('Search error:', e);
-        await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
-        await ctx.reply(getText(userId, 'error'));
-        return showMainMenu(ctx, userId);
+        console.error('Global error:', e);
+        ctx.reply(getText(userId, 'error'));
     }
 });
 
-bot.action('action_cancel', async (ctx) => {
-    const userId = ctx.from.id;
-    await ctx.deleteMessage().catch(() => {});
-    await ctx.reply(getText(userId, 'canceled'));
-    await showMainMenu(ctx, userId);
-    await ctx.answerCbQuery();
-});
+bot.launch().then(() => console.log('🚀 Бот успешно запущен на Railway'));
 
-checkYtDlp();
-bot.launch().then(() => {
-    console.log('🚀 Бот запущен');
-});
-
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
